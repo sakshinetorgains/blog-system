@@ -45,8 +45,6 @@ export default function SubscribeModal({ source = "Blog" }: { source?: string })
   const [requestLoading, setRequestLoading] = useState(false);
   const [verifyLoading, setVerifyLoading] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
-
-  // Cooldown based on backend response (retryAfterSeconds / resendCooldownSeconds)
   const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
   const [nowTick, setNowTick] = useState(() => Date.now());
 
@@ -106,7 +104,7 @@ export default function SubscribeModal({ source = "Blog" }: { source?: string })
     if (!fullname || !email || !phone || !organization || !interestsSelected) {
       setFeedback({ type: "error", message: "All fields are required" });
       return false;
-    }
+    };
 
     const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
     if (!emailOk) {
@@ -164,7 +162,6 @@ export default function SubscribeModal({ source = "Blog" }: { source?: string })
       });
       return;
     }
-
     setFeedback({ type: "error", message: apiMessage });
   };
 
@@ -273,7 +270,6 @@ export default function SubscribeModal({ source = "Blog" }: { source?: string })
                       setForm({ ...form, fullname: e.target.value })
                     }
                   />
-
                   <input
                     placeholder="Email"
                     className="w-full border border-gray-300 bg-white text-gray-900 placeholder-gray-400 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -282,7 +278,6 @@ export default function SubscribeModal({ source = "Blog" }: { source?: string })
                       setForm({ ...form, email: e.target.value })
                     }
                   />
-
                   <input
                     placeholder="Phone Number"
                     className="w-full border border-gray-300 bg-white text-gray-900 placeholder-gray-400 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -339,7 +334,6 @@ export default function SubscribeModal({ source = "Blog" }: { source?: string })
                 <h2 className="text-xl font-semibold text-gray-800 mb-3">
                   Verify OTP
                 </h2>
-
                 <input
                   placeholder="Enter OTP"
                   className="w-full border border-gray-300 bg-white text-gray-900 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -371,12 +365,10 @@ export default function SubscribeModal({ source = "Blog" }: { source?: string })
                 </button>
 
                 <p className="text-xs text-gray-500 mt-3">
-                  Check backend console for OTP (demo mode).
+                  Check backend console for OTP.
                 </p>
               </>
             )}
-
-            {/* ================= DONE ================= */}
             {step === "done" && (
               <div className="text-center py-6">
                 <p
@@ -389,8 +381,6 @@ export default function SubscribeModal({ source = "Blog" }: { source?: string })
                 </p>
               </div>
             )}
-
-            {/* Feedback */}
             {step !== "done" && feedback && (
               <p
                 className={`mt-4 text-sm ${feedback.type === "success"
