@@ -14,57 +14,56 @@ module.exports = factories.createCoreController(
     'api::subscribe.subscribe',
     ({ strapi }) => ({
         async subscribe(ctx) {
-            console.log("reached in the api ====>");
-            console.log(ctx.request.body.data);
+            const otpManager = require('../../otp/services/otp-manager');
+
+            const payload = ctx.request.body?.data ?? ctx.request.body ?? {};
             const {
-                fullname,
-                email,
-                phone,
-                organization,
-                interests,
-                source,
-            } = ctx.request.body.data;
+              fullname,
+              email,
+              phone,
+              organization,
+              interests,
+              source,
+            } = payload;
 
             if (!email || !fullname) {
-                return ctx.badRequest("Required fields missing");
+              return ctx.badRequest('Required fields missing');
             }
-            const existing = await strapi.db
-                .query('api::subscribe.subscribe')
-                .findOne({ where: { email } });
 
-            if (existing && existing.verified) {
-                return ctx.badRequest("You have already subscribed");
-            }
-            const otp = Math.floor(100000 + Math.random() * 900000).toString();
-            const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
-            await strapi.db.query('api::otp.otp').deleteMany({
-                where: { email }
-            });
-            if (!existing) {
-                await strapi.db.query('api::subscribe.subscribe').create({
-                    data: {
-                        fullname,
-                        email,
-                        phone,
-                        organization,
-                        interests,
-                        source,
-                        verified: false
-                    }
+            const phoneDigits =
+              phone === undefined || phone === null ? null : String(phone);
+            const normalizedPhone =
+              phoneDigits === null
+                ? null
+                : phoneDigits.replace(/[^\d]/g, "");
+
+            const normalized = {
+              fullname: String(fullname).trim(),
+              email: String(email).trim().toLowerCase(),
+              phone:
+                normalizedPhone && normalizedPhone.length > 0
+                  ? normalizedPhone
+                  : null,
+              organization: organization ? String(organization).trim() : null,
+              interests: Array.isArray(interests) ? interests : [],
+              source: source ? String(source) : 'Blog',
+            };
+
+            try {
+              const result = await otpManager.requestOtp(strapi, normalized);
+              if (result?.status) {
+                ctx.status = result.status;
+                return ctx.send({
+                  error: { message: result.message },
+                  ...result.meta,
                 });
+              }
+              return ctx.send(result);
+            } catch (err) {
+              strapi.log.error('Subscribe OTP error', err);
+              ctx.status = 500;
+              return ctx.send({ error: { message: 'Something went wrong' } });
             }
-            await strapi.db.query('api::otp.otp').create({
-                data: {
-                    email,
-                    otp,
-                    expiresAt,
-                    isUsed: false
-                }
-            });
-
-            console.log(`OTP for ${email}: ${otp}`);
-
-            return { message: "OTP sent successfully" };
         }
     })
 );

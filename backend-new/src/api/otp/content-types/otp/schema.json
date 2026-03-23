@@ -14,14 +14,21 @@
     "email": {
       "type": "email"
     },
-    "otp": {
-      "type": "integer"
+    "hashed_otp": {
+      "type": "string",
+      "required": true
     },
-    "expirytime": {
-      "type": "date"
+    "expiry_time": {
+      "type": "datetime",
+      "required": true
+    },
+    "attempt_count": {
+      "type": "integer",
+      "default": 0
     },
     "verified": {
-      "type": "boolean"
+      "type": "boolean",
+      "default": false
     }
   }
 }

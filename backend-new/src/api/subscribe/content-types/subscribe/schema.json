@@ -12,10 +12,13 @@
   "pluginOptions": {},
   "attributes": {
     "fullname": {
-      "type": "string"
+      "type": "string",
+      "required": true
     },
     "email": {
-      "type": "email"
+      "type": "email",
+      "required": true,
+      "unique": true
     },
     "phone": {
       "type": "biginteger"
@@ -35,7 +38,8 @@
       ]
     },
     "verified": {
-      "type": "boolean"
+      "type": "boolean",
+      "default": false
     }
   }
 }
