@@ -18,6 +18,73 @@ const otpError = (status, message, meta = {}) => ({
   meta,
 });
 
+// const requestOtp = async (strapi, subscriptionData) => {
+//   const { salt, expiryMinutes, maxAttempts, resendCooldownSeconds } =
+//     getOtpConfig();
+
+//   const { email } = subscriptionData;
+
+//   const subscriber = await subscriberManager.findByEmail(strapi, email);
+//   if (subscriber?.verified) {
+//     return otpError(400, 'You have already subscribed');
+//   }
+
+//   // Cooldown: prevent repeated OTP spam within a short window
+//   const existingOtps = await strapi.entityService.findMany(OTP_UID, {
+//     filters: { email, verified: false },
+//     sort: { createdAt: 'desc' },
+//     limit: 1,
+//   });
+
+//   if (existingOtps.length > 0) {
+//     const latest = existingOtps[0];
+//     // If the OTP is already expired, allow a resend immediately.
+//     if (!isExpired(latest.expiry_time)) {
+//       const createdAtMs = new Date(latest.createdAt).getTime();
+//       const nowMs = Date.now();
+
+//       const deltaSeconds = Math.floor((nowMs - createdAtMs) / 1000);
+//       if (deltaSeconds < resendCooldownSeconds) {
+//         const retryAfterSeconds = resendCooldownSeconds - deltaSeconds;
+//         return otpError(429, 'Please wait before requesting a new OTP', {
+//           retryAfterSeconds,
+//         });
+//       }
+//     }
+//   }
+
+//   // Keep at most 1 active OTP per email
+//   await strapi.db.query(OTP_UID).deleteMany({
+//     where: { email, verified: false },
+//   });
+
+//   const otp = generateOtp();
+//   const hashed = hashOtp(otp, salt);
+//   const expiresAt = new Date(Date.now() + expiryMinutes * 60 * 1000);
+
+//   await subscriberManager.upsertPending(strapi, subscriptionData);
+
+//   await strapi.entityService.create(OTP_UID, {
+//     data: {
+//       email,
+//       hashed_otp: hashed,
+//       expiry_time: expiresAt,
+//       attempt_count: 0,
+//       verified: false,
+//     },
+//   });
+
+//   // Console log is fine for dev; raw OTP must not be persisted.
+//   console.log(`[OTP] OTP for ${email}: ${otp}`);
+
+//   return {
+//     message: 'OTP sent successfully',
+//     otpExpiresInSeconds: expiryMinutes * 60,
+//     resendCooldownSeconds,
+//     maxAttempts,
+//   };
+// };
+
 const requestOtp = async (strapi, subscriptionData) => {
   const { salt, expiryMinutes, maxAttempts, resendCooldownSeconds } =
     getOtpConfig();
@@ -29,7 +96,7 @@ const requestOtp = async (strapi, subscriptionData) => {
     return otpError(400, 'You have already subscribed');
   }
 
-  // Cooldown: prevent repeated OTP spam within a short window
+  // Cooldown check
   const existingOtps = await strapi.entityService.findMany(OTP_UID, {
     filters: { email, verified: false },
     sort: { createdAt: 'desc' },
@@ -38,32 +105,34 @@ const requestOtp = async (strapi, subscriptionData) => {
 
   if (existingOtps.length > 0) {
     const latest = existingOtps[0];
-    // If the OTP is already expired, allow a resend immediately.
+
     if (!isExpired(latest.expiry_time)) {
       const createdAtMs = new Date(latest.createdAt).getTime();
       const nowMs = Date.now();
 
       const deltaSeconds = Math.floor((nowMs - createdAtMs) / 1000);
+
       if (deltaSeconds < resendCooldownSeconds) {
-        const retryAfterSeconds = resendCooldownSeconds - deltaSeconds;
         return otpError(429, 'Please wait before requesting a new OTP', {
-          retryAfterSeconds,
+          retryAfterSeconds: resendCooldownSeconds - deltaSeconds,
         });
       }
     }
   }
 
-  // Keep at most 1 active OTP per email
+  // Delete old OTPs
   await strapi.db.query(OTP_UID).deleteMany({
     where: { email, verified: false },
   });
 
+  // 🔢 Generate OTP
   const otp = generateOtp();
   const hashed = hashOtp(otp, salt);
   const expiresAt = new Date(Date.now() + expiryMinutes * 60 * 1000);
 
   await subscriberManager.upsertPending(strapi, subscriptionData);
 
+  // 💾 Save OTP
   await strapi.entityService.create(OTP_UID, {
     data: {
       email,
@@ -74,8 +143,29 @@ const requestOtp = async (strapi, subscriptionData) => {
     },
   });
 
-  // Console log is fine for dev; raw OTP must not be persisted.
-  console.log(`[OTP] OTP for ${email}: ${otp}`);
+  // ✉️ SEND EMAIL (THIS WAS MISSING)
+  try {
+    console.log("📩 Sending OTP to:", email);
+
+    await strapi.plugins['email'].services.email.send({
+      to: email,
+      from: process.env.EMAIL_FROM,
+      subject: 'Your OTP Code',
+      html: `
+        <h2>Email Verification</h2>
+        <p>Your OTP is:</p>
+        <h1>${otp}</h1>
+        <p>This OTP is valid for ${expiryMinutes} minutes.</p>
+      `,
+    });
+
+    console.log("✅ OTP email sent successfully");
+
+  } catch (err) {
+    console.error("❌ Email sending failed:", err);
+
+    return otpError(500, 'Failed to send OTP email');
+  }
 
   return {
     message: 'OTP sent successfully',
@@ -84,7 +174,6 @@ const requestOtp = async (strapi, subscriptionData) => {
     maxAttempts,
   };
 };
-
 const verifyOtp = async (strapi, { email, otp, subscriberData }) => {
   const { salt, maxAttempts } = getOtpConfig();
 
